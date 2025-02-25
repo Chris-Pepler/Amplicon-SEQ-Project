@@ -1,0 +1,117 @@
+#!/usr/bin/bash
+
+workdir=$(pwd)
+mkdir qiimedir
+qiimedir=${workdir}/qiimedir
+mkdir qii_outdir
+qii_outdir=${qiimedir}/qii_outdir
+mkdir emp-single-end-sequences
+
+module load qiime2/
+
+qiime tools import \
+  --type EMPSingleEndSequences \
+  --input-path ${workdir}/emp-single-end-sequences \
+  --output-path ${qii_outdir}/emp-single-end-sequences.qza
+
+
+########demux script
+
+mkdir ${qii_outdir}/demux
+demux=${qii_outdir}/demux
+
+qiime demux emp-single \
+  --i-seqs ${qii_outdir}/emp-single-end-sequences.qza \
+  --m-barcodes-file ${workdir}/sample-metadata.tsv \
+  --m-barcodes-column barcode-sequence \
+  --o-per-sample-sequences ${qii_outdir}/demux/demux.qza \
+  --o-error-correction-details ${qii_outdir}/demux/demux-details.qza
+
+qiime demux summarize \
+  --i-data ${qii_outdir}/demux/demux.qza \
+  --o-visualization ${qii_outdir}/demux/demux.qzv
+
+
+#!/usr/bin/bash
+
+workdir=$(pwd)
+mkdir qiimedir
+qiimedir=${workdir}/qiimedir
+mkdir qii_outdir
+qii_outdir=${workdir}/qii_outdir
+
+
+#######denoise script
+
+mkdir denoise
+denoise=${workdir}/denoise
+
+qiime dada2 denoise-single \
+  --i-demultiplexed-seqs ${workdir}/single-end-demux.qza \
+  --p-trim-left 8 \
+  --p-trunc-len 0 \
+  --o-representative-sequences ${denoise}/rep-seqs.qza \
+  --o-table ${denoise}/table.qza \
+  --o-denoising-stats ${denoise}/stats.qza \
+  --p-n-threads 8
+
+qiime feature-table summarize \
+  --i-table ${denoise}/table.qza \
+  --o-visualization ${qii_outdir}/table.qzv \
+  --m-sample-metadata-file ${workdir}/Stream_metadata.tsv
+
+qiime feature-table tabulate-seqs \
+  --i-data ${denoise}/rep-seqs.qza \
+  --o-visualization ${qii_outdir}/rep-seqs.qzv
+
+
+
+#!/usr/bin/bash
+
+workdir=$(pwd)
+qii_outdir=${workdir}/qii_outdir
+mkdir tax
+tax=${qii_outdir}/tax
+denoise=${workdir}/denoise
+
+####taxonomy####
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier ${workdir}/silva-138-99-nb-classifier.qza \
+  --i-reads ${denoise}/rep-seqs.qza \
+  --o-classification ${tax}/taxonomy.qza
+
+qiime metadata tabulate \
+  --m-input-file ${tax}/taxonomy.qza \
+  --o-visualization ${tax}/taxonomy.qzv
+
+qiime taxa barplot \
+  --i-table ${denoise}/table.qza \
+  --i-taxonomy ${tax}/taxonomy.qza \
+  --m-metadata-file ${workdir}/Stream_metadata.tsv \
+  --o-visualization ${qii_outdir}/taxa-bar-plots.qzv
+
+
+#!/usr/bin/bash
+
+####diversity script
+workdir=$(pwd)
+qii_outdir=${workdir}/qii_outdir
+mkdir div
+div=${qii_outdir}/div
+tax=${workdir}/qii_outdir/tax
+denoise=${workdir}/denoise
+
+qiime diversity core-metrics \
+  --i-table ${denoise}/table.qza \
+  --p-sampling-depth 1103 \
+  --m-metadata-file ${workdir}/Stream_metadata.tsv \
+  --output-dir ${div}/core-metrics-results
+
+qiime emperor plot \
+  --i-pcoa ${div}/core-metrics-results/bray_curtis_pcoa_results.qza \
+  --m-metadata-file ${workdir}/Stream_metadata.tsv \
+  --p-custom-axes Stream-Treatment-Surface_Time \
+  --o-visualization ${div}/core-metrics-results/bray-curtis-emperor-stream-treatment-surface_time.qzv
+
+module purge
