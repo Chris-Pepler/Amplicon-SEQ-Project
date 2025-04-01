@@ -5,3 +5,5 @@ High Throughput quality control and trimming for bacterial amplicon sequencing u
 BASH / R
 
 Bacteria / Microbiology / Ecosystems
+
+MRes / Cardiff University 
